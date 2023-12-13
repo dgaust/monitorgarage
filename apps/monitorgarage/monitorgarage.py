@@ -109,6 +109,6 @@ class MonitorGarage(hass.Hass):
             self.next_direction = NextDirection.Closing
 
     def queued_logger(self, message):
-        # Log messages with proper queue handling
+        # Log messages with proper queue handling but I'm lazy, so haven't implemented queuing as I'll let appdaemon handle that.
         self.log(message)
 
