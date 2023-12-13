@@ -1,6 +1,28 @@
 # monitorgarage
 
-Example usage
+Template Covere example
+
+```
+- platform: template
+  covers:
+    garage_door:
+      friendly_name: Garage Door
+      unique_id: itsagaragedoor1234
+      device_class: garage
+      value_template: >
+        {{ states('input_select.garagedoorhelper') }}
+      open_cover:
+        service: switch.turn_on
+        entity_id: switch.garage_door_implant_5
+      close_cover:
+        service: switch.turn_on
+        entity_id: switch.garage_door_implant_5
+      stop_cover:
+        service: switch.turn_on
+        entity_id: switch.garage_door_implant_5
+```
+
+Example apps.yaml usage
 
 ```
 monitorgarage:
