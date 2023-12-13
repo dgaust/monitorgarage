@@ -105,5 +105,5 @@ class MonitorGarage(hass.Hass):
             self.next_direction = "Close"
 
     def queued_logger(self, message):
-        # Log messages with proper queue handling
+        # Log messages with proper queue handling but being lazy this is just straight logging at the moment.
         self.log(message)
