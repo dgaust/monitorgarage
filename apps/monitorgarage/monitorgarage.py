@@ -2,10 +2,14 @@ import appdaemon.plugins.hass.hassapi as hass
 from enum import Enum
 
 class CoverMode(Enum):
-    Open = 1
-    Closed = 2
-    Opening = 3
-    Closing = 4
+    Open = 0
+    Closed = 1
+    Opening = 2
+    Closing = 3
+
+class NextDirection(Enum):
+    Opening = 0
+    Closing = 1
 
 class MonitorGarage(hass.Hass):
     current_position = 0
@@ -58,16 +62,16 @@ class MonitorGarage(hass.Hass):
             self.set_cover_input_select(CoverMode.Open)
         elif new == 'on' and self.current_door_state == CoverMode.Open:
             # Set the next direction based on the previous state
-            if self.next_direction == "Close":
+            if self.next_direction == NextDirection.Closing:
                 self.set_cover_input_select(CoverMode.Closing)
-            elif self.next_direction == "Open":
+            elif self.next_direction == NextDirection.Opening:
                 self.set_cover_input_select(CoverMode.Opening)
 
         # Set the next direction state
         if new == 'on' and self.current_door_state == CoverMode.Opening:
-            self.next_direction = "Close"
+            self.next_direction = NextDirection.Closing
         elif new == 'on' and self.current_door_state == CoverMode.Closing:
-            self.next_direction = 'Open'
+            self.next_direction = NextDirection.Opening
 
     def top_sensor_state_change(self, entity, attribute, old, new, kwargs):
         # Log when the top sensor state changes
@@ -100,10 +104,11 @@ class MonitorGarage(hass.Hass):
         
         # Set the next direction based on the chosen option
         if option == CoverMode.Closing:
-            self.next_direction = "Open"
+            self.next_direction = NextDirection.Opening
         elif option == CoverMode.Opening:
-            self.next_direction = "Close"
+            self.next_direction = NextDirection.Closing
 
     def queued_logger(self, message):
-        # Log messages with proper queue handling but being lazy this is just straight logging at the moment.
+        # Log messages with proper queue handling
         self.log(message)
+
