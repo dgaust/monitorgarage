@@ -61,16 +61,27 @@ class monitorgarage(hass.Hass):
 
     def toggle_switch_listener(self, entity, attribute, old, new, kwargs):
         self.queuedlogger("Control switch toggled")
+        
         self.current_door_state = self.get_state(self.input_select)
-        if (self.current_door_state == 'Opening'):
-            self.next_direction = "Close"
-        elif self.current_door_state == 'Closing':
-            self.next_direction = 'Open'
         
-        #ToDo set the right option here
-        
+        # checks state to make sure the door is moving, which means it will stop in a partial open position
         if (new == 'on' and (self.current_door_state == "Closing" or self.current_door_state == 'Opening')):
-            self.setcoverinputselect("Open")   
+            self.setcoverinputselect("Open")
+        elif (new == 'on' and self.current_door_state == 'Open'):
+            if self.next_direction == "Close":
+                self.setcoverinputselect("Closing")
+            elif self.next_direction == "Open":
+                self.setcoverinputselect("Opening")
+
+        # then if the set the next direction state
+        if (new == 'on' and self.current_door_state == 'Opening'):
+            self.next_direction = "Close"
+        elif (new == 'on' and self.current_door_state == 'Closing'):
+            self.next_direction = 'Open' 
+        
+        # ToDo set the right option here
+        # if (new == 'on' and (self.current_door_state == "Closing" or self.current_door_state == 'Opening')):
+        #    self.setcoverinputselect("Open")   
 
     def top_sensor_state_change(self, entity, attribute, old, new, kwargs):
         self.queuedlogger(entity +" changed to " + new)
