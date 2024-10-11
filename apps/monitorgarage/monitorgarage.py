@@ -1,114 +1,113 @@
 import appdaemon.plugins.hass.hassapi as hass
 from enum import Enum
 
-class CoverMode(Enum):
-    Open = 0
-    Closed = 1
-    Opening = 2
-    Closing = 3
+class DoorState(Enum):
+    Open = "Open"
+    Closed = "Closed"
+    Opening = "Opening"
+    Closing = "Closing"
+    Stopped = "Stopped"  # Represents a stopped state
 
-class NextDirection(Enum):
-    Opening = 0
-    Closing = 1
-
-class MonitorGarage(hass.Hass):
-    current_position = 0
-    current_door_state = CoverMode.Closed
-    top_sensor_state = "off"
-    bottom_sensor_state = "off"
-    input_select = ""
-    next_direction = ""
-
+class GarageMonitor(hass.Hass):
     def initialize(self):
-        # Log initialization
-        self.queued_logger("Started monitoring the garage door")
-        
+        # Initialize states and parameters
         try:
-            # Get the garage door and the top and bottom sensors
-            self.garage_door = self.args.get('door')
             self.top_sensor = self.args.get('top_sensor')
             self.bottom_sensor = self.args.get('lower_sensor')
-            self.input_select = self.args.get('input_select')
-            self.toggle_switch = self.args.get('toggle_switch')
+            self.toggle_button = self.args.get('toggle_switch')
+            self.input_selector = self.args.get('input_select')
+            self.current_state = DoorState.Closed
+            self.next_state = DoorState.Open  # Initial next state when closed
+            self.log(f"Bottom sensor is: {self.bottom_sensor} and Top sensor is: {self.top_sensor}")
+            self.log(f"Garage monitor initialized. Current state: {self.current_state}")
+            # Check the door state when loaded
+            self.check_initial_state()
+            # Listen for changes in sensors and button press
+            self.listen_state(self.sensor_state_change, self.top_sensor)
+            self.listen_state(self.sensor_state_change, self.bottom_sensor)
+            self.listen_state(self.toggle_switch_listener, self.toggle_button)
+            # Initial logging
+            
         except Exception as e:
             # Log error if sensor settings retrieval fails
             self.queued_logger(f"Error getting sensor settings: {e}")
-        finally:
-            # Get the current state so we can set up correctly
-            self.top_sensor_state = self.get_state(self.top_sensor)
-            self.bottom_sensor_state = self.get_state(self.bottom_sensor)
-            self.queued_logger(f"Top State: {self.top_sensor_state} Bottom State: {self.bottom_sensor_state}")
 
-            # Set initial state based on sensor status
-            if self.top_sensor_state == "off" and self.bottom_sensor_state == "off":
-                self.set_cover_input_select(CoverMode.Closed)
-            elif self.top_sensor_state == "unavailable" or self.bottom_sensor_state == "unavailable":
-                self.set_cover_input_select(CoverMode.Open)
-            else:
-                self.set_cover_input_select(CoverMode.Open)
+    def check_initial_state(self):
+            # Check the sensor states at startup to determine the door's initial state
+            top_state = self.get_state(self.top_sensor)
+            bottom_state = self.get_state(self.bottom_sensor)
+            # Door is CLOSED if Bottom State is OFF and Top State is OFF
+            # Door is fully OPEN if Bottom state is ON and Top State is
+            if top_state == "on" and bottom_state == "on":
+                self.current_state = DoorState.Open
+                self.next_state = DoorState.Closing
+            elif top_state == "off" and bottom_state == "on":
+                self.current_state = DoorState.Open
+                self.next_state = DoorState.Closing
+            elif top_state == "off" and bottom_state == "off":
+                self.current_state = DoorState.Closed
+                self.next_state = DoorState.Opening  # Default to opening if stopped
+            self.set_cover_state(self.current_state)
+            # Log the initial state detection
+            self.log(f"Initial state check: Current state: {self.current_state}, Next state: {self.next_state}")
 
-            # Setup listeners for the various states of monitoring entity
-            self.listen_state(self.top_sensor_state_change, self.top_sensor)
-            self.listen_state(self.bottom_sensor_state_change, self.bottom_sensor)
-            self.listen_state(self.toggle_switch_listener, self.toggle_switch)
+    def sensor_state_change(self, entity, attribute, old, new, cb_args):
+        # Determine the current state based on sensors
+        self.log(f"Sensor changed state: {entity}")
+        self.top_state = self.get_state(self.top_sensor)
+        self.bottom_state = self.get_state(self.bottom_sensor)
+        self.log(f"Garage door sensor changed. Current state of lower: {self.bottom_state} and upper is: {self.top_state}")
+        
+        #Fully Closed
+        if self.bottom_state == "off" and self.top_state == "off":
+            self.current_state = DoorState.Closed
+            self.next_state = DoorState.Opening 
+            self.set_cover_state(self.current_state)          
+        # Fully Open
+        elif self.top_state == "on" and self.bottom_state == "on":
+            self.current_state = DoorState.Open
+            self.next_state = DoorState.Closing
+            self.set_cover_state(self.current_state)
+        # Fully Open and now closing
+        elif self.top_state == "off" and self.lower_state == "on":
+            self.current_state = DoorState.Closing
+            self.next_state = DoorState.Closed
+            self.set_cover_state(self.current_state)
+        # Fully Closed and now opening
+        elif self.top_state == "on" and self.lower_state == "off":
+            self.current_state = DoorState.Opening
+            self.next_state = DoorState.Open
+            self.set_cover_state(self.current_state)
+
+        
+        
+        # Log the state change
 
     def toggle_switch_listener(self, entity, attribute, old, new, kwargs):
-        # Log when the control switch is toggled
-        self.queued_logger("Control switch toggled")
-        self.current_door_state = self.get_state(self.input_select)
+        if new == "on":  # Button press detected
+            if self.current_state in [DoorState.Open, DoorState.Closed]:
+                # Fully open or closed, initiate opening or closing
+                self.set_cover_state(self.next_state)
+            elif self.current_state in [DoorState.Opening, DoorState.Closing]:
+                # If opening or closing, stop the door
+                self.current_state = DoorState.Open
+                self.log("Stopping the door.")
+                self.set_cover_state(self.current_state)
+            elif self.current_state == DoorState.Open:
+                # If stopped, reverse the direction
+                self.set_cover_state(self.next_state)
 
-        # Check state to determine if the door is moving and stop in a partial open position
-        if new == 'on' and (self.current_door_state == CoverMode.Closing or self.current_door_state == CoverMode.Opening):
-            self.set_cover_input_select(CoverMode.Open)
-        elif new == 'on' and self.current_door_state == CoverMode.Open:
-            # Set the next direction based on the previous state
-            if self.next_direction == NextDirection.Closing:
-                self.set_cover_input_select(CoverMode.Closing)
-            elif self.next_direction == NextDirection.Opening:
-                self.set_cover_input_select(CoverMode.Opening)
-
-        # Set the next direction state
-        if new == 'on' and self.current_door_state == CoverMode.Opening:
-            self.next_direction = NextDirection.Closing
-        elif new == 'on' and self.current_door_state == CoverMode.Closing:
-            self.next_direction = NextDirection.Opening
-
-    def top_sensor_state_change(self, entity, attribute, old, new, kwargs):
-        # Log when the top sensor state changes
-        self.queued_logger(f"{entity} changed to {new}")
-        if new == 'on':
-            self.set_cover_position(100)
-            self.set_cover_input_select(CoverMode.Open)
-        elif new == 'off':
-            self.set_cover_position(75)
-            self.set_cover_input_select(CoverMode.Closing)
-
-    def bottom_sensor_state_change(self, entity, attribute, old, new, kwargs):
-        # Log when the bottom sensor state changes
-        self.queued_logger(f"{entity} changed to {new}")
-        if new == 'off':
-            self.set_cover_position(0)
-            self.set_cover_input_select(CoverMode.Closed)
-        elif new == 'on':
-            self.set_cover_position(25)
-            self.set_cover_input_select(CoverMode.Opening)
-
-    def set_cover_position(self, position):
-        # Log when the cover position is set
-        self.queued_logger(f"Cover position set to: {position}")
-
-    def set_cover_input_select(self, option):
-        # Log when the input select is set
-        self.queued_logger(f"Setting input select to: {option.name}")
-        self.select_option(self.input_select, option.name)
+    def set_cover_state(self, state):        
+        self.log(f"Setting input select to: {state.value}")
+        self.select_option(self.input_selector, state.value)
+        if state == DoorState.Opening:
+            self.current_state = DoorState.Opening
+            self.next_state = DoorState.Closing
+            self.log("Opening the garage door.")
+        elif state == DoorState.Closing:
+            self.current_state = DoorState.Closing
+            self.next_state = DoorState.Opening
+            self.log("Closing the garage door.")
         
-        # Set the next direction based on the chosen option
-        if option == CoverMode.Closing:
-            self.next_direction = NextDirection.Opening
-        elif option == CoverMode.Opening:
-            self.next_direction = NextDirection.Closing
-
-    def queued_logger(self, message):
-        # Log messages with proper queue handling but I'm lazy, so haven't implemented queuing as I'll let appdaemon handle that.
-        self.log(message)
-
+        # self.select_option(self.input_selector, self.current_state)
+        # Additional implementation to interact with the actual garage door hardware goes here
