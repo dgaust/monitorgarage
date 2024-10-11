@@ -108,6 +108,3 @@ class GarageMonitor(hass.Hass):
             self.current_state = DoorState.Closing
             self.next_state = DoorState.Opening
             self.log("Closing the garage door.")
-        
-        # self.select_option(self.input_selector, self.current_state)
-        # Additional implementation to interact with the actual garage door hardware goes here
