@@ -54,30 +54,40 @@ class GarageMonitor(hass.Hass):
     def sensor_state_change(self, entity, attribute, old, new, cb_args):
         # Determine the current state based on sensors
         self.log(f"Sensor changed state: {entity}")
-        self.top_state = self.get_state(self.top_sensor)
-        self.bottom_state = self.get_state(self.bottom_sensor)
+        
+        # self.top_state = self.get_state(self.top_sensor)
+        # self.bottom_state = self.get_state(self.bottom_sensor)
+        
+        if entity == self.top_sensor:
+            self.top_state = new
+            self.bottom_state = self.get_state(self.bottom_sensor)
+        else:
+            self.top_state = self.get_state(self.top_sensor)
+            self.bottom_state = new
+
+        self.log(f"Entity that changed was: {entity}")
         self.log(f"Garage door sensor changed. Current state of lower: {self.bottom_state} and upper is: {self.top_state}")
         
         #Fully Closed
         if self.bottom_state == "off" and self.top_state == "off":
             self.current_state = DoorState.Closed
             self.next_state = DoorState.Opening 
-            self.set_cover_state(self.current_state)          
+            self.set_cover_state(self.current_state)       
         # Fully Open
-        elif self.top_state == "on" and self.bottom_state == "on":
+        elif self.bottom_state == "on" and self.top_state == "on":
             self.current_state = DoorState.Open
             self.next_state = DoorState.Closing
             self.set_cover_state(self.current_state)
         # Fully Open and now closing
-        elif self.top_state == "off" and self.lower_state == "on":
-            self.current_state = DoorState.Closing
-            self.next_state = DoorState.Closed
+        elif self.bottom_state == "on" and self.top_state == "off" :
+            self.current_state = self.next_state
+            if self.next_state == DoorState.Open:
+                self.next_state = DoorState.Closed
+            else:
+                self.next_state = DoorState.Open
             self.set_cover_state(self.current_state)
-        # Fully Closed and now opening
-        elif self.top_state == "on" and self.lower_state == "off":
-            self.current_state = DoorState.Opening
-            self.next_state = DoorState.Open
-            self.set_cover_state(self.current_state)
+        else:
+            self.log("For some reason nothing matched")
 
         
         
